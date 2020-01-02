@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Todo.Models;
@@ -22,14 +23,14 @@ namespace Todo.Controllers
 
         // GET: api/Users
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<User>>> Getusers()
+        public async Task<ActionResult<IEnumerable<IdentityUser>>> Getusers()
         {
             return await _context.users.ToListAsync();
         }
 
         // GET: api/Users/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<User>> GetUser(string id)
+        public async Task<ActionResult<IdentityUser>> GetUser(string id)
         {
             var user = await _context.users.FindAsync(id);
 
@@ -45,7 +46,7 @@ namespace Todo.Controllers
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for
         // more details see https://aka.ms/RazorPagesCRUD.
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutUser(string id, User user)
+        public async Task<IActionResult> PutUser(string id, IdentityUser user)
         {
             if (id != user.Id)
             {
@@ -77,7 +78,7 @@ namespace Todo.Controllers
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for
         // more details see https://aka.ms/RazorPagesCRUD.
         [HttpPost]
-        public async Task<ActionResult<User>> PostUser(User user)
+        public async Task<ActionResult<IdentityUser>> PostUser(IdentityUser user)
         {
             _context.users.Add(user);
             try
@@ -101,7 +102,7 @@ namespace Todo.Controllers
 
         // DELETE: api/Users/5
         [HttpDelete("{id}")]
-        public async Task<ActionResult<User>> DeleteUser(string id)
+        public async Task<ActionResult<IdentityUser>> DeleteUser(string id)
         {
             var user = await _context.users.FindAsync(id);
             if (user == null)
