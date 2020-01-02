@@ -1,12 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using Todo.Models;
+using Todo.Resources;
 
 namespace Todo.Controllers
 {
@@ -15,63 +22,90 @@ namespace Todo.Controllers
     public class UsersController : ControllerBase
     {
         private readonly Context _context;
+        private readonly IConfiguration _configuration;
+        private readonly SignInManager<IdentityUser> _signManager;
+        private readonly UserManager<IdentityUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
 
-        public UsersController(Context context)
+        public UsersController(Context context, IConfiguration configuration, UserManager<IdentityUser> userManager, SignInManager<IdentityUser> signInManager, RoleManager<IdentityRole> roleManager)
         {
             _context = context;
+            _configuration = configuration;
+            _userManager = userManager;
+            _signManager = signInManager;
+            _roleManager = roleManager;
         }
 
         // GET: api/Users
+        [Authorize(Roles = "adm")]
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<IdentityUser>>> Getusers()
+        public async Task<ActionResult<IEnumerable<UserResource>>> GetUsers()
         {
-            return await _context.users.ToListAsync();
+            var users = await _context.Users.ToListAsync();
+            var returnList = new List<UserResource>();
+            foreach (var user in users)
+            {
+                returnList.Add(
+                    new UserResource
+                    {
+                        Id = user.Id,
+                        Name = user.NormalizedUserName,
+                        Role = (await _userManager.GetRolesAsync(user)).First()
+                    });
+            }
+            return returnList;
         }
 
         // GET: api/Users/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<IdentityUser>> GetUser(string id)
+        [Authorize(Roles = "Administrator,User")]
+        [Route("[action]")]
+        [HttpGet]
+        public async Task<IActionResult> GetUser()
         {
-            var user = await _context.users.FindAsync(id);
+            string id = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) { return NotFound(); }
 
-            if (user == null)
+            var role = (await _userManager.GetRolesAsync(user)).First();
+            return Ok(
+                new UserResource
+                {
+                    Id = user.Id,
+                    Name = user.NormalizedUserName,
+                    Role = role
+                });
+        }
+
+        // Put: api/Users/user
+        [HttpPut]
+        [Route("[action]/{username}")]
+        public async Task<ActionResult<string>> RequestToken([FromBody] string password, string username)
+        {
+            var user = await _userManager.FindByNameAsync(username);
+            if (!await _userManager.CheckPasswordAsync(user, password))
             {
                 return NotFound();
             }
+            var roles = await _userManager.GetRolesAsync(user);
 
-            return user;
-        }
+            var key = Encoding.ASCII.GetBytes("labai-ilgas-raktas");
 
-        // PUT: api/Users/5
-        // To protect from overposting attacks, please enable the specific properties you want to bind to, for
-        // more details see https://aka.ms/RazorPagesCRUD.
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutUser(string id, IdentityUser user)
-        {
-            if (id != user.Id)
+            var JWToken = new JwtSecurityToken(
+                issuer: "http://localhost:5000/",
+                audience: "http://localhost:5000/",
+                claims: new List<Claim>
             {
-                return BadRequest();
-            }
-
-            _context.Entry(user).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!UserExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(ClaimTypes.Role, roles[0])
+            },
+        notBefore: new DateTimeOffset(DateTime.Now).DateTime,
+                expires: new DateTimeOffset(DateTime.Now.AddDays(1)).DateTime,
+                signingCredentials: new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            );
+            var token = new JwtSecurityTokenHandler().WriteToken(JWToken);
+            await _userManager.SetAuthenticationTokenAsync(user, TokenOptions.DefaultProvider, "token", token);
+            return new JsonResult(new { token = token });
         }
 
         // POST: api/Users
