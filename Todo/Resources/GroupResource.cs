@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Todo.Models
+namespace Todo.Resources
 {
-    public class Group
+    public class GroupResource
     {
         public int Id { get; set; }
         public string Title { get; set; }
-        public User User { get; set; }
     }
 }

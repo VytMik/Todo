@@ -10,6 +10,7 @@ namespace Todo.Models
         public int Id { get; set; }
         public string Description { get; set; }
         public DateTime Deadline { get; set; }
+        public bool IsComplete { get; set; }
 
         public Group Group { get; set; }
 
